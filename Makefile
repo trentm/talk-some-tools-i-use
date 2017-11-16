@@ -7,9 +7,9 @@ all:
 publish:
 	mkdir -p tmp
 	[[ -d tmp/gh-pages ]] || git clone $(shell git remote get-url origin) tmp/gh-pages
-	cd tmp/gh-pages \
-		&& git checkout gh-pages \
-		&& git pull --rebase origin gh-pages
+	(cd tmp/gh-pages \
+		&& git checkout -b gh-pages \
+		&& git pull --rebase origin gh-pages || true)
 	cp -PR \
 		index.html \
 		css \
@@ -20,5 +20,4 @@ publish:
 		&& git add -A . \
 		&& git commit -a -m "publish latest version" \
 		&& git push origin gh-pages || true)
-	echo "Published to http://trentm.github.io/$(shell basename $PWD)/"
-
+	echo "Published to http://trentm.github.io/$(shell basename $(PWD))/"
