@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <link rel="stylesheet" href="css/reveal.css">
+  <!--<link rel="stylesheet" href="css/theme/white.css">-->
+  <!--<link rel="stylesheet" href="css/theme/sky.css">-->
+  <link rel="stylesheet" href="css/theme/trent.css">
+  <style>
+
+  </style>
+</head>
+<body>
+
+<div class="reveal">
+<div class="slides">
+
+
+<section>
+<h2>some tools I use</h2>
+
+XXX link to slides on trentm.com, and repo
+</section>
+
+
+<section>
+<h1>HISTORY</h1>
+</section>
+
+<section>
+<h2>json and sdc-imgapi</h2>
+
+<p>
+Writing tools at Joyent started for me with `json` and `sdc-imgapi`.
+This is how you used to list IMGAPI's images:
+</p>
+
+<pre>
+$ curl -i -sS -H accept:application/json http://10.99.99.14/images
+[{"name":"smartos","version":"1.6.3","uuid":...
+</pre>
+</section>
+
+<section>
+<h2><strong>json</strong> and sdc-imgapi</h2>
+
+<pre>
+$ curl -sS -H accept:application/json http://10.99.99.14/images
+[{"name":"smartos","version":"1.6.3","uuid":...
+</pre>
+
+<pre class="fragment">
+$ curl ... http://10.99.99.14/images | <strong>nicerest</strong>
+[
+  {
+    "name": "smartos",
+    "version": "1.6.3",
+...
+</pre>
+
+<div class="fragment">
+Add streaming/filtering/lookups/etc. and call it <code>json</code>.
+"Because screw SEO." -- Jim Pick
+
+<a href="http://trentm.com/json/">http://trentm.com/json/</a>
+</div>
+</section>
+
+<section>
+<h2>json and <strong>sdc-imgapi</strong></h2>
+
+<pre>
+$ curl -sS -H accept:application/json http://10.99.99.14/images
+[{"name":"smartos","version":"1.6.3","uuid":...
+</pre>
+
+<pre class="fragment">
+$ <strong>sdc-imgapi /images</strong>
+[
+  {
+    "name": "smartos",
+    "version": "1.6.3",
+...
+</pre>
+</section>
+
+
+<section>
+<h2>The story</h2>
+We'll walk through fixing a (made up) bug in PAPI.
+</section>
+
+
+<section>
+<h1>ISSUES</h1>
+</section>
+
+
+<section>
+<h2><code>jirash issue create</code></h2>
+
+Basically every Joyent change should have a JIRA issue, so let's create one:
+
+<pre>
+$ npm install -g jirash
+$ <strong>jirash issue create PAPI</strong>
+... write title and desc in $EDITOR ...
+</pre>
+
+<em>Caveat</em>: This was broken by the jira.joyent.us update.
+I'll fix it in <a href="https://jira.joyent.us">TRITON-12</a>.
+</section>
+
+
+<section>
+<h2><code>jirash issue get</code></h2>
+
+Or perhaps the issue already exists and you just want to look it up:
+
+<pre>
+$ <strong>jirash issue get PAPI-144</strong>
+PAPI-144 that thing is broken (doogle -> trent.mick, ...)
+</pre>
+
+<div class="fragment">
+Shortcut:
+
+<pre>
+$ <strong>jirash PAPI-144</strong>
+PAPI-144 that thing is broken
+</pre>
+</div>
+</section>
+
+
+<section>
+<h1>CORES</h1>
+</section>
+
+
+<section>
+<h2><code>thoth debug DUMP</code></h2>
+
+<p>Perhaps there is a core file in thoth:</p>
+
+<pre>
+$ thoth debug DUMP
+</pre>
+</section>
+
+<section>
+<h2>manta dead drop</h2>
+
+Perhaps someone has a core file to give you.
+You can do a <em>Manta dead drop</em> with a signed URL:
+
+<pre>
+$ <strong>msign</strong> -e $(date -v+1d "+%s") -m PUT /trent.mick/stor/tmp/the.core
+https://us-east.manta.joyent.com/trent.mick/stor/tmp/the.core?alg...
+</pre>
+
+<div class="fragment">
+Then that someone can:
+
+<pre>
+<strong>curl -T</strong> the.core \
+    'https://us-east.manta.joyent.com/trent.mick/stor/tmp/the.core?alg...'
+</pre>
+</div>
+</section>
+
+
+<section>
+<h2><code>mdb ...</code></h2>
+
+And then you can debug it with mdb:
+
+<pre>
+mlogin /trent.mick/stor/tmp/the.core
+mdb $MANTA_INPUT_FILE
+</pre>
+</section>
+
+
+<section>
+<h2>Recent crashes in JPC/SPC</h2>
+
+You could also look for recent crashes in JPC and SPC:
+
+<pre>
+<strong>thoth info</strong> mtime=1d \
+    | json -g -e '
+        this.short = this.id.slice(0,12);
+        this.fmri = this.properties.fmri || "-";
+        this.dc = (this.properties.sysinfo && this.properties.sysinfo.Datacenter_Name || "(unknown dc)");
+        this.host = (this.properties.sysinfo && this.properties.sysinfo.Hostname || "(unknown hostname)");
+    ' -a short dc host fmri cmd ticket
+</pre>
+</section>
+
+<section>
+That looks like:
+
+<pre>
+...
+31a9583cd9e7 eu-central-1c MSB26767 svc:/smartdc/marlin/lackey:default node
+6d7db9703dbf eu-central-1c MSB26767 svc:/smartdc/marlin/lackey:default node
+6493fa4a21e1 eu-central-1a HA9BWPND2 - pg_prefaulter
+c688c4e0da3a us-east-1a HA8S7DRD2 svc:/smartdc/agent/vm-agent:default node
+e616c75765ce eu-central-1a MSB26726 - node
+eda729ce0b0a eu-central-1c MSB17172 - node
+289ba161e3e7 eu-central-1c MSB17172 - node
+a71e94ce6dad eu-central-1a HA9BXGND2 - pg_prefaulter
+64225c720495 eu-central-1c MSB17172 - node
+...
+</pre>
+</section>
+
+<section>
+<h2>KIENER BONUS: <code>tabula</code></h2>
+
+<pre>
+$ npm install -g tabula
+<span class="fragment highlight-red">
+$ tabula --flip
+(╯°□°)╯︵ ┻━┻
+</span>
+</pre>
+
+(Note: "tabula" is also the table outputting lib that sdcadm,
+triton, and other tools use.)
+</section>
+
+
+<section>
+<h1>LOGS</h1>
+</section>
+
+<section>
+<h2><code>bunyan</code></h2>
+
+You can try to look at logs, in the zone:
+
+<pre>
+ssh coal
+sdc-login -l papi
+</pre>
+
+<pre>
+bunyan `svcs -L papi`                   # recent
+bunyan /var/log/sdc/upload/papi*.log    # rotated logs
+tail -f `svcs -L papi` | bunyan         # live
+bunyan -p papi                          # live, trace-level
+</pre>
+
+<a href="https://github.com/trentm/node-bunyan#readme">
+https://github.com/trentm/node-bunyan#readme
+</a>
+</section>
+
+<section>
+<h2>search hourly logs in Manta</h2>
+
+E.g., search cloudapi logs for throttling cases:
+
+<pre>
+mfind -t o /admin/stor/logs/$dc/cloudapi-808{1,2,3,4}/$DATE \
+    | mjob create -o \
+        -m "(grep '\"Throttling\"' || true)" \
+        -r cat
+</pre>
+
+See some scripts of mine with canned log and data dump jobs here:
+<a href="https://mo.joyent.com/trentops/blob/master/jobs">
+https://mo.joyent.com/trentops/blob/master/jobs</a>.
+</section>
+
+<section>
+<h2><code>mantash</code></h2>
+
+<pre>
+$ pip install manta
+</pre>
+
+<pre>
+$ mantash
+[trent.mick@us-east.manta.joyent.com /trent.mick/stor]$ cd /admin/stor/logs
+[/admin/stor/logs]$ ls
+...
+us-east-1
+us-east-2
+...
+[/admin/stor/logs]$ cd us-east-1/
+[/admin/stor/logs/us-east-1]$ ls
+adminui
+...
+papi
+...
+</pre>
+</section>
+
+<section>
+<h2><code>mantash</code> (cont...)</h2>
+
+<pre>
+[/admin/stor/logs/us-east-1]$ cd papi/2017/10/10/10
+[/admin/stor/logs/us-east-1/papi/2017/10/10/10]$ ls
+1da304f0-ab1d-414b-92c7-d137e4d790e8.log
+9c372d11-20f4-47bf-8317-acfc7e730093.log
+bb7e07f7-19de-44af-ac8b-0f48e658944c.log
+
+[/admin/stor/logs/us-east-1/papi/2017/10/10/10]$ ls -al
+   object  5323155  1da304f0-ab1d-414b-92c7-d137e4d790e8.log
+   object  1984347  9c372d11-20f4-47bf-8317-acfc7e730093.log
+   object   887341  bb7e07f7-19de-44af-ac8b-0f48e658944c.log
+
+[/admin/stor/logs/us-east-1/papi/2017/10/10/10]$ login 1da&lt;TAB&gt;
+</pre>
+</section>
+
+
+<section>
+<h2>get a core with bunyan</h2>
+
+Or given a log line like this:
+
+<pre>
+log.debug({...}, 'MoveImageFile: start');
+</pre>
+
+you could get a core via:
+
+<pre>
+dtrace -w -n 'bunyan62267:::log-debug
+    /strstr(copyinstr(arg0), "MoveImageFile: start") != NULL/
+    { stop(); system("gcore %d; prun %d", pid, pid); exit(0); }'
+</pre>
+
+<a href="http://dtrace.org/blogs/dap/2013/10/14/stopping-a-broken-program-in-its-tracks/">
+http://dtrace.org/blogs/dap/2013/10/14/stopping-a-broken-program-in-its-tracks/
+</a><br/>
+<a href="https://github.com/trentm/node-bunyan/issues/470">
+https://github.com/trentm/node-bunyan/issues/470
+</a>
+</section>
+
+
+<section>
+<h1>COAL</h1>
+</section>
+
+<section>
+<h2><code>make coal-and-open</code></h2>
+
+You'll probably want to test in a COAL, so let's build one:
+
+<pre>
+git checkout git@github.com:joyent/sdc-headnode.git
+cd sdc-headnode
+<strong>make coal-and-open</strong>
+</pre>
+</section>
+
+<section>
+<h2>setup COAL</h2>
+
+To test your COAL, you might need more than the base install. Like:
+
+<pre>
+<span class="fragment">sdcadm post-setup common-external-nics  # AdminUI and IMGAPI</span>
+<span class="fragment">sdcadm post-setup dev-headnode-prov</span>
+<span class="fragment">sdcadm post-setup cloudapi</span>
+<span class="fragment">sdcadm post-setup docker</span>
+<span class="fragment">sdcadm post-setup cns</span>
+<span class="fragment">sdcadm post-setup cmon</span>
+<span class="fragment">sdcadm post-setup fabrics && ... && reboot</span>
+<span class="fragment">sdc-useradm create -A login=trentm userpassword=secret123</span>
+<span class="fragment" style="color: red">tabula --flip</span>
+</pre>
+</section>
+
+
+<section>
+<h2><code>coal-post-setup.sh</code></h2>
+
+"coal-post-setup.sh" does all this for you:
+
+<pre>
+git clone git@github.com:joyent/trentops.git
+trentops/bin/coal-post-setup.sh -A
+</pre>
+
+...and a few more things.
+</section>
+
+
+<section>
+  <h1>DEV</h1>
+</section>
+
+<section>
+<h2><code>giddyup</code></h2>
+
+<pre>
+alias giddyup='git fetch -p -a origin
+    && git pull --rebase origin $(git rev-parse --abbrev-ref HEAD)
+    && git submodule update --init'
+</pre>
+
+Does your git pull like it should:
+
+<pre>
+$ cd sdc-papi
+$ <strong>giddyup</strong>
+...
+</pre>
+</section>
+
+<section>
+<h2><code>rsync-to HEADNODE</code></h2>
+
+A number of repos have a ./tools/rsync-to script to copy local
+(non-binary) file changes to a headnode service instance.
+
+<pre>
+$ cd sdc-papi
+$ ./tools/rsync-to coal
+</pre>
+</section>
+
+
+<section>
+<h2>run test suites</h2>
+
+The Globe Theatre repo has a script to drive most any service's
+test suite:
+
+<pre>
+$ git clone git@github.com:globe-theatre.git
+$ globe-theatre/bin/stage-test-papi coal
+</pre>
+
+Handy if you don't really know how to run the test suite for
+the repo you are working on.
+</section>
+
+<section>
+<h2><code>moray_massage_object</code></h2>
+
+Hack/tweak a Moray object with
+<a href="https://mo.joyent.com/trentops/blob/master/bin/moray_massage_object">
+moray_massage_object </a>:
+
+<pre>
+$ ssh coal
+$ sdc-login -l moray
+$ <strong>moray_massage_object \
+    sdc_packages \
+    ebe3b369-0e82-e29f-cbff-cf74c41ed148 \
+    -e 'this.name += "XXX"'</strong>
+--- /tmp/.moray_massage_object.81280.before
++++ /tmp/.moray_massage_object.81280.after
+@@ -2,7 +2,7 @@
+   "bucket": "sdc_packages",
+   "key": "ebe3b369-0e82-e29f-cbff-cf74c41ed148",
+   "value": {
+-    "name": "sample-8G",
++    "name": "sample-8GXXX",
+</pre>
+</section>
+
+<section>
+<h2>TRY_BRANCH builds</h2>
+
+You can get a build of your changes. Commit to a feature branch:
+
+<pre>
+git checkout -b PAPI-123
+git commit -am "$(<strong>jirash PAPI-123</strong>)"
+git push origin
+</pre>
+
+Then, tell Jenkins to build it for you:
+
+<ul>
+<li>
+  <a href="https://jenkins.joyent.us/job/papi/build">
+  https://jenkins.joyent.us/job/papi/build</a>
+</li>
+<li>set <code>TRY_BUILD=PAPI-123</code></li>
+</ul>
+</section>
+
+<section>
+<h2><code>updates-imgadm</code></h2>
+`updates-imgadm` is the tool to work with updates.jo:
+
+<pre>
+git clone git@github.com:joyent/sdc-imgapi-cli.git
+cd sdc-imgapi-cli
+make
+./bin/updates-imgadm help
+</pre>
+
+(This is already installed in any headnode GZ.)
+</section>
+
+
+<section>
+<h2><code>updates-imgadm list</code></h2>
+
+<pre>
+$ updates-imgadm -C experimental list name=papi
+UUID      NAME  VERSION
+...
+98735caa  papi  PAPI-123-20170510T184849Z-g296378b
+</pre>
+</section>
+
+
+<section>
+<h2><code>sdcadm up -C CHANNEL</code></h2>
+
+Update to this PAPI in your COAL:
+
+<pre>
+ssh coal
+sdcadm up -C experimental papi   # uses latest one
+</pre>
+
+Or more safely with a specific UUID:
+
+<pre>
+sdcadm up -C experimental papi@98735caa-998a-485f-97af-1fbbbec80376
+</pre>
+</section>
+
+
+<section>
+<h2><code>triton</code></h2>
+
+<pre>
+$ npm install -g triton
+</pre>
+
+Hint: "coal-post-setup.sh" from earlier created a "coal" profile for you.
+
+<pre>
+$ triton profile set coal
+</pre>
+
+Create an instance:
+
+<pre>
+$ triton instance create IMAGE PACKAGE
+...
+</pre>
+
+Etc.
+</section>
+
+<section>
+<h2><code>triton cloudapi ...</code></h2>
+
+Call raw <a href="https://apidocs.joyent.com/cloudapi/">CloudAPI REST endpoints</a>
+for debugging:
+
+<pre>
+$ triton cloudapi /--ping
+{
+    "ping": "pong",
+    "cloudapi": {
+        "versions": [
+            ...
+            "8.0.0"
+        ]
+    }
+}
+</pre>
+
+(Not <code>triton cloudapi <em>/ping</em></code>. That's a real account in JPC.)
+</section>
+
+
+<section>
+<h2>CLULOW BONUS: badger</h2>
+
+Honey badger don't care.
+
+<div class="fragment">
+<img src="img/badger.png" height=400 />
+</div>
+</section>
+
+
+<section>
+  <h1>CR</h1>
+</section>
+
+<section>
+<h2><code>grr ISSUE</code></h2>
+
+<a href="https://github.com/joyent/grr">https://github.com/joyent/grr</a>
+for Gerrit.
+
+<pre>
+$ npm install -g joyent-grr
+</pre>
+
+Move to your working copy and tell grr which issue:
+
+<pre>
+$ cd sdc-papi
+$ <strong>grr PAPI-144</strong>
+Issue: PAPI-144 that thing is broken
+
+Make commits and run `grr` in this branch to create a CR.
+</pre>
+</section>
+
+
+<section>
+<h2><code>grr</code></h2>
+
+Commit:
+
+<pre>
+$ git commit -am "fix that thing"
+[PAPI-144 b2af153] fix that thing
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+</pre>
+
+And `grr` creates the CR:
+
+<pre>
+$ <strong>grr</strong>
+Issue: PAPI-144 that thing is broken
+New commits (1):
+    b2af153 fix that thing
+Creating CR:
+    ...
+CR created: 2947 patchset 1 &lt;https://cr.joyent.us/2947&gt;
+</pre>
+
+It handles the CR commit message for you.
+</section>
+
+
+<section>
+<h2><code>grr</code> after more commits</h2>
+
+<pre>
+$ git commit -am "bumpver for the fix"
+[PAPI-144 7c3543f] bumpver for the fix
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+</pre>
+
+`grr` will create a new patchset (handling the squash for you):
+
+<pre>
+$ grr
+Issue: PAPI-144 that thing is broken
+New commits (1):
+    7c3543f bumpver for the fix
+Updating CR 2947:
+    ...
+CR updated: 2947 patchset 2 &lt;https://cr.joyent.us/2947&gt;
+</pre>
+</section>
+
+
+<section>
+  <h1>LEFT OVERS</h1>
+</section>
+
+
+<section>
+<h2><code>col80</code></h2>
+
+<pre>
+function col80 ()
+{
+    perl -pe 's/^(.{80})(.*?)$/$1\e[1;31;43m$2\e[0m/'
+}
+</pre>
+</section>
+
+
+<section>
+<h2><code>jirash issue ls</code></h2>
+
+<pre>
+$ <strong>jirash filter ls</strong>
+ID     NAME                                       OWNER.NAME
+...
+10325  RELENG: open issues                        trent.mick
+11527  Triton high prio open issues               trent.mick
+11370  Triton tickets created in the <strong>last</strong> 7 days  orlando
+10183  me: open issues                            trent.mick
+11371  rfd67                                      trent.mick
+</pre>
+
+<pre class="fragment">
+$ <strong>jirash issue ls last</strong>  # ... in the last 7 days
+KEY          SUMMARYCLIPPED                            ASSIGNEE
+ZAPI-811     vms.volumes.tests stalls in nightly-1 a…  ...
+PUBAPI-1460  nightly1-080-test-cloudapi fails in vol…  ...
+PORTAL-3195  There is no validation message when use…  ...
+</pre>
+</section>
+
+<section>
+<h2>ripgrep</h2>
+
+<a href="https://github.com/BurntSushi/ripgrep/">
+https://github.com/BurntSushi/ripgrep/
+</a> is great.
+</section>
+
+
+<section>
+<h2>add account to the operator group</h2>
+
+<pre>
+sdc-ufds modify --attribute uniquemember \
+    --value "$(sdc-useradm get $LOGIN | json dn)" \
+    --type add "cn=operators, ou=groups, o=smartdc"
+</pre>
+</section>
+
+<section>
+<h2>set root password via Ur</h2>
+
+<pre>
+sdc-oneachnode -n $THENODE 'sed -I .bak -e "s|root:.*:14897|root:\$5\$NaWW7lz.\$bVr5l8mtuhjVWbI3/0DT/i78T.g3tWdJ9QYOib.fmVA:14897|" /etc/shadow'
+</pre>
+</section>
+
+<section>
+<h2>dump the UFDS/LDAP tree</h2>
+
+<pre>
+sdc-ldap search objectclass=* dn | grep dn \
+    | /usr/perl5/bin/perl -pe '$_ = length($_) . " $_"' \
+    | sort -n \
+    | awk '{$1=""; $2=""; print}' \
+    | /usr/perl5/bin/perl -e 'while (<>) { s/^\s+//s; chomp; print join(" ", reverse(split(", ", $_))), "\n" }' \
+    | sort
+</pre>
+
+(* if fewer than 1000 items.)
+</section>
+
+<section>
+<h2><code>mmsay</code></h2>
+
+<pre>
+mmlog mib | mmsay
+</pre>
+</section>
+
+<section>
+<h2><code>say-scrum</code></h2>
+
+<pre>
+cd .../triton-dev
+./bin/say-scrum
+</pre>
+</section>
+
+<section>
+<h1>FIN</h1>
+
+<small>(Did I make it in 5 minutes?)</small>
+</section>
+
+</div>
+</div>
+
+<script src="js/reveal.js"></script>
+<script>
+Reveal.initialize({
+    controls: false,
+
+    // Vertical centering of slides
+    //center: true,
+
+    //help: true,
+
+    history: true,
+
+    // Flags if speaker notes should be visible to all viewers
+    //showNotes: false,
+
+    // Opens links in an iframe preview overlay
+    //previewLinks: false,
+
+    // Transition style
+    //transition: 'slide', // none/fade/slide/convex/concave/zoom
+
+    // Transition speed
+    transitionSpeed: 'fast', // default/fast/slow
+
+    // Transition style for full page slide backgrounds
+    //backgroundTransition: 'fade', // none/fade/slide/convex/concave/zoom
+
+    // Parallax background image
+    // TODO: try this
+    //parallaxBackgroundImage: '', // e.g. "'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg'"
+    //parallaxBackgroundSize: '', // CSS syntax, e.g. "2100px 900px"
+    //parallaxBackgroundHorizontal: null,
+    //parallaxBackgroundVertical: null,
+});
+</script>
+</body>
+</html>
